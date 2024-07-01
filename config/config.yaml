@@ -1,0 +1,9 @@
+#poolfastqf: "/home/daia1/my_workdir/other_pipeline/dada2/test/test_R1_001.fastq.gz"
+#poolfastqr: "/home/daia1/my_workdir/other_pipeline/dada2/test/test_R2_001.fastq.gz"
+input_directory: "/home/daia1/my_workdir/other_pipeline/dada2/test/"
+name: "exp_name"
+db_directory: "/home/gomesa/projects/human_microbiota/data/16S_blast/"
+primerf: "AYTGGGYDTAAAGNG"
+primerr: "CCGTCAATTYHTTTRAGT"
+trunclen: 180
+minasvlen: 300

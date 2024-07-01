@@ -1,0 +1,110 @@
+import glob
+import os
+import re
+envvars:
+    "HOME"
+
+
+configfile: os.path.join(workflow.basedir, "config/config.yaml")
+
+
+def get_files_from_input_dir(config):
+    print("getting input fastqs from " + config["input_directory"])
+    files = glob.glob(config["input_directory"] + "/*f*q*")
+    for f in files:
+        if not f.endswith(".gz"):
+            print(f, "must be compressed; no .gz extension detected")
+    print(files)
+   # ext = os.path.splitext(os.path.splitext(files[0])[0])[1]
+    ext = os.path.splitext(os.path.splitext(files[0])[0])[1]
+    print(ext)
+    print("detecting fastq f/r pattern")
+    thispatf, thispatr = None, None
+    fpats = ["_1", "R1_001", ".1", "F", "R1"]
+    rpats = ["_2", "R2_001", ".2", "R", "R2"]
+    spats = ["R1_001", ".f"]
+    for i, pat in enumerate(fpats):
+        for f in files:
+            #print(".*" + pat + ext + ".gz")
+            #print(re.match(".*" + pat + ext + ".gz", f))
+            if re.match(".*" + re.escape(pat) + ext + ".gz", f):
+                print("detected pattern: " + pat)
+                if thispatf is None:
+                    thispatf = pat
+                    thispatr = rpats[i]
+                else:
+                    if thispatf != pat:
+                        print("Multiple naming conventions detected:", pat, thispatf)
+    if thispatf is None:
+        raise ValueError("unable to parse fastq naming conventio n to differentiate forward and reverse reads")
+    files_dict = {
+        "readsf": sorted([x for x in files if x.endswith(thispatf + ext + ".gz")]),
+        "readsr": sorted([x for x in files if x.endswith(thispatr + ext + ".gz")]),
+        "readss": sorted([x for x in files if x.endswith(thispatf + ext + ".gz")])
+    }
+    singleendmode = False
+    for k,v in files_dict.items():
+        print("   :-:", k, ": ", v)
+        # if v == None:
+        #     raise ValueError("Unable to find required {} file in input directory".format(k))
+    if files_dict["readsf"] is None and files_dict["readss"] is not None:
+        print("Forward reads not found; assuming single-end data")
+        singleendmode = True
+    return (files_dict, singleendmode)
+
+input_files, singleendmode = get_files_from_input_dir(config)
+
+
+
+def get_files_from_db_dir(config):
+    print("getting paths for database files in " + config["db_directory"])
+    db_base = "bacteria_and_archea.16SrRNA.fna"
+    anno_base = "bacteria_and_archea.16SrRNA.id_and_taxonomy_v2.txt"
+    files_dict = {
+        "db":   glob.glob(config["db_directory"] + "/*" + db_base)[0],
+        "anno": glob.glob(config["db_directory"] + "/*" + anno_base)[0]
+    }
+    for k,v in files_dict.items():
+        print("   :-:", k, ": ", v)
+        if v == None:
+            raise ValueError("Unable to find required {} file in db directory".format(k))
+    return files_dict
+
+db_files = get_files_from_db_dir(config)
+
+
+rule all:
+    input:
+        "dada2_results/blast_out/ASV_annotated.txt"
+
+
+rule run_dada2:
+    input:
+        readsf=input_files["readsf"],
+        readsr=input_files["readsr"],
+    params:
+        input_dir = config["input_directory"],
+        trunclen = config["trunclen"],
+        minasvlen= config["minasvlen"],
+        outdir_name = "dada2_results",
+        ncores = config["ncores"]
+    output:
+        fasta = "dada2_results/ASV_sequences.fasta",
+    conda: "envs/dada2.yaml"
+    log: "logs/data2.log"
+    threads: config["ncores"]
+    message: "07 - Identifying ASVs with DADA2"
+    script: "scripts/dadascript_noprior_ag.R"
+
+
+rule run_ASV_annotation:
+    input:
+        fasta = "dada2_results/ASV_sequences.fasta",
+        db = db_files["db"],
+        annotation = db_files["anno"]
+    output:
+        annotated_asvs="dada2_results/blast_out/ASV_annotated.txt"
+    message: "08 - Annotating ASVs with BLAST"
+    log: "logs/blast_asvs.log"
+    conda: "envs/blast.yaml"
+    script: "scripts/blast_simplified_dada2_cl.R"
