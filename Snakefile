@@ -23,7 +23,7 @@ def get_files_from_input_dir(config):
         "oligos": oligos_files[0]
     }
     for k,v in files_dict.items():
-        print("   :-:", k, ": ", v)
+        #print("   :-:", k, ": ", v)
         if v == None:
             raise ValueError("Unable to find required {} file in input directory".format(k))
     return files_dict
@@ -33,7 +33,7 @@ input_files = get_files_from_input_dir(config)
 
 
 def get_files_from_db_dir(config):
-    print("getting paths for database files in " + config["db_directory"])
+    #print("getting paths for database files in " + config["db_directory"])
     db_base = "bacteria_and_archea.16SrRNA.fna"
     anno_base = "bacteria_and_archea.16SrRNA.id_and_taxonomy_v2.txt"
     files_dict = {
@@ -41,7 +41,7 @@ def get_files_from_db_dir(config):
         "anno": glob.glob(config["db_directory"] + "/*" + anno_base)[0]
     }
     for k,v in files_dict.items():
-        print("   :-:", k, ": ", v)
+        #print("   :-:", k, ": ", v)
         if v == None:
             raise ValueError("Unable to find required {} file in db directory".format(k))
     return files_dict
@@ -64,13 +64,14 @@ with open (input_files["oligos"], "r") as inf:
             else:
                 samples.append(thisid + ".." + pool)
 
-print("Samples found in oligos file:\n- " + "\n- ".join(samples))
+onstart:
+    print("Samples found in oligos file:\n- " + "\n- ".join(samples))
 
 rule all:
     input:
         "dada2_results/blast_out/ASV_annotated.txt",
         "dada2_results/ASV_sequences.fasta",
-        "dada2_results/asv_count.csv",
+        "dada2_results/asv_counts.csv",
         "dada2_results/blast_out/blast_passed_not_passed.txt"
 
 rule merge_lanes_if_needed:
@@ -91,10 +92,11 @@ rule remove_primers:
         readsf = "reads1.fastq.gz",
         readsr = "reads2.fastq.gz"
     output:
-        "reads1.fastq",
-        "reads2.fastq",
-        "barcodes.fastq"
-    container: "docker://vdblab/metawrap:1.3"
+        readsf="reads1.fastq",
+        readsr="reads2.fastq",
+        barcodes="barcodes.fastq",
+    container: "docker://ghcr.io/vdblab/biopython:1.70a"
+    log: "logs/primer_removal.log"
     message: "01 - removing primer sequences from fastq pools"
     params:
         primerf=config['primerf'],
@@ -104,10 +106,10 @@ rule remove_primers:
 
 rule clean_oligos:
     input: input_dir = config["input_directory"]
-    output: os.path.basename(input_files["oligos"]) + ".clean"
+    output: oligos=os.path.basename(input_files["oligos"]) + ".clean"
 #    container: "docker://rocker/r-base:4.0.0"
     #conda: "envs/dada2.yaml"
-    container: "docker://ghcr.io/vdblab/dada2:1.20.0"
+    container: "docker://ghcr.io/vdblab/dada2legacy:1.18.0"
     message: "02 - cleaning oligos file"
     log: "logs/oligo_cleaning.log"
     script: "scripts/oligos_cleaning_cl.R"
@@ -119,10 +121,11 @@ rule convert_oligos_to_mapping_file:
     output:
         "1.map.txt",
         "2.map.txt"
-    container: "docker://vdblab/metawrap:1.3"
+    container: "docker://ghcr.io/vdblab/biopython:1.70a"
     message: "03 - converting oligos file to mapping file for demultiplexing"
     log: "logs/convert_oligos.log"
     params:
+        outdir=".",
         primerf=config['primerf'],
         primerr=config['primerr']
     script: "scripts/convert_oligos.py"
@@ -130,7 +133,7 @@ rule convert_oligos_to_mapping_file:
 
 rule guess_encoding_of_fastq:
     input: "reads1.fastq"
-    container: "docker://vdblab/metawrap:1.3"
+    container: "docker://ghcr.io/vdblab/biopython:1.70a"
     output: "encoding.txt"
     message: "04 - determining the encoding of the FASTQ quality scores"
     log: "logs/guess_encoding.log"
@@ -151,7 +154,7 @@ rule add_demultiplex_info_to_fastq:
         demultiplex_r1= "demultiplex_r1",
         demultiplex_r2= "demultiplex_r2"
     log: "logs/add_demultiplex_info.log"
-    container: "docker://ghcr.io/qiime:1.9.1"
+    container: "docker://ghcr.io/vdblab/qiime:1.9.1"
 #    conda: "envs/py2.yaml"
     message: "05 - labelling reads with sample id"
     shell: """
@@ -187,7 +190,7 @@ rule demultiplex:
         reads2="isolated_oligos/{sampleid}_R2.fastq.gz"
 
     log: "logs/demultiplex_{sampleid}.log"
-    container: "docker://ghcr.io/qiime:1.9.1"
+    container: "docker://ghcr.io/vdblab/qiime:1.9.1"
 #    conda: "envs/py2.yaml"
     message: "06 - extracting reads for sample"
     shell: """
@@ -221,9 +224,8 @@ rule run_dada2:
         ncores = 16
     output:
         fasta = "dada2_results/ASV_sequences.fasta",
-        counts = "dada2_results/asv_count.csv"
-#    conda:  "envs/dada2.yaml"
-    container: "docker://ghcr.io/vdblab/dada2:1.20.0"
+        counts = "dada2_results/asv_counts.csv"
+    container: "docker://ghcr.io/vdblab/dada2legacy:1.18.0"
     log: "logs/dada2script.log"
     threads: 8 # this is hardcoded in dadascript_noprior_ag.R.  For now...
     message: "07 - Identifying ASVs with DADA2"
@@ -246,5 +248,5 @@ rule run_ASV_annotation:
         blast = "dada2_results/blast_out/blast_passed_not_passed.txt",
     message: "08 - Annotating ASVs with BLAST"
     log: "logs/blast_asvs.log"
-    conda: "envs/blast.yaml"
+    container: "docker://ghcr.io/vdblab/legacyampliconblast:0.0.1"
     script: "scripts/blast_simplified_dada2_cl.R"

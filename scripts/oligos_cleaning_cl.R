@@ -25,16 +25,17 @@ if(data_path=="./"){
   #It needs the full path name to extract the "pool###" from the path.
   data_path =getwd()
 }
-n_oligos_files=length(dir(data_path,pattern = "\\.oligos$|\\.oligos\\.txt$"));
+oligos_file=dir(data_path, pattern = "\\.oligos$|\\.oligos\\.txt$", full.names=TRUE)
+
+print(oligos_file)
 
 #print(sprintf("N oligos: %d", n_oligos_files))
-if(n_oligos_files != 1){
+if(length(oligos_file) != 1){
   error_str = sprintf("Path %s should have exactly 1 oligos file.",data_path);
   #print(error_str)
   stop(error_str)
 }
 
-oligos_file = dir(data_path,pattern = "\\.oligos$|\\.oligos\\.txt$",full.names = T)
 
 oligos_file_no_txt = outdir_path = snakemake@output[["oligos"]]
 
@@ -47,13 +48,13 @@ oligos_file_no_txt = outdir_path = snakemake@output[["oligos"]]
 
 #awk '$0' was necessary to clean up white space that occured in some files.
 system(sprintf("tr '\r' '\n' < %s | awk '$0' > temp_%s; mv temp_%s %s",
-               oligos_file_no_txt,
+               oligos_file,
                basename(oligos_file_no_txt),
                basename(oligos_file_no_txt),
                oligos_file_no_txt));
 
 dt_oligos_primer_lines = read.table(oligos_file,header = F,nrows = 2,
-                                    sep = "\t",comment.char = "",
+                                    sep = "\t",comment.char = "#",
                                     fill = T);
 
 if(is.null(dt_oligos_primer_lines$V4)){
@@ -65,7 +66,7 @@ dt_oligos_primer_lines$V4[is.na(dt_oligos_primer_lines$V4)]="";
 dt_oligos_primer_lines[is.na(dt_oligos_primer_lines)]="";
 
 print("primer lines done!")
-dt_oligos = read.table(oligos_file,header = F,skip = 2,sep = "\t",comment.char = "")
+dt_oligos = read.table(oligos_file,header = F,skip = 2,sep = "\t",comment.char = "#")
 dt_oligos[is.na(dt_oligos)]=""
 
 if(grepl("Sample_",data_path) & grepl("_complete",data_path)){

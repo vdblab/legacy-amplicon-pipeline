@@ -85,6 +85,6 @@ def main():
         args = parser.parse_args()
         convert_oligos_to_mappingfile_rj(args.oligofile)
 
-with open(snakemake.log[0], "w") as f:
-    sys.stderr = sys.stdout = f
-    convert_oligos_to_mappingfile_rj(snakemake.input.oligosfile, outdir=snakemake.params.outdir)
+#with open(snakemake.log[0], "w") as f:
+#    sys.stderr = sys.stdout = f
+convert_oligos_to_mappingfile_rj(snakemake.input.oligosfile, outdir=snakemake.params.outdir, verbose=True)

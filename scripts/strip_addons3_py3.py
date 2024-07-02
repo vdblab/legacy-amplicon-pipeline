@@ -1,5 +1,10 @@
-#! /usr/bin/env python2.7
-import sys,os,regex as re,argparse,gzip,itertools
+#! /usr/bin/env python3
+import sys
+import os
+import regex as re
+import argparse
+import gzip
+import itertools
 from Bio import SeqIO
 
 # system("strip_addons3.py ./pool218_complete_CAGATC_L001_R1_001.fastq.gz ./pool218_complete_CAGATC_L001_R2_001.fastq.gz
@@ -172,7 +177,6 @@ def main():
 
 #if __name__ == '__main__':
 #	main()
-
 
 with open(snakemake.log[0], "w") as f:
     sys.stderr = sys.stdout = f
