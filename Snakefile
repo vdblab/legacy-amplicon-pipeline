@@ -82,6 +82,7 @@ rule merge_lanes_if_needed:
     output:
         temp("reads1.fastq.gz"),
         temp("reads2.fastq.gz")
+    threads: 1
     shell:
         """
         cat {input.readsf} >> reads1.fastq.gz
@@ -93,12 +94,13 @@ rule remove_primers:
         readsf = "reads1.fastq.gz",
         readsr = "reads2.fastq.gz"
     output:
-        readsf="reads1.fastq",
-        readsr="reads2.fastq",
+        readsf=temp("reads1.fastq"),
+        readsr=temp("reads2.fastq"),
         barcodes="barcodes.fastq",
     container: "docker://ghcr.io/vdblab/biopython:1.70a"
     log: "logs/primer_removal.log"
     message: "01 - removing primer sequences from fastq pools"
+    threads: 1
     params:
         primerf=config['primerf'],
         primerr=config['primerr']
@@ -110,6 +112,7 @@ rule clean_oligos:
     output: oligos=os.path.basename(input_files["oligos"]) + ".clean"
     container: "docker://ghcr.io/vdblab/dada2legacy:1.18.0"
     message: "02 - cleaning oligos file"
+    threads: 1
     log: "logs/oligo_cleaning.log"
     script: "scripts/oligos_cleaning_cl.R"
 
@@ -123,6 +126,7 @@ rule convert_oligos_to_mapping_file:
     container: "docker://ghcr.io/vdblab/biopython:1.70a"
     message: "03 - converting oligos file to mapping file for demultiplexing"
     log: "logs/convert_oligos.log"
+    threads: 1
     params:
         outdir=".",
         primerf=config['primerf'],
@@ -135,38 +139,40 @@ rule guess_encoding_of_fastq:
     container: "docker://ghcr.io/vdblab/biopython:1.70a"
     output: "encoding.txt"
     message: "04 - determining the encoding of the FASTQ quality scores"
+    threads: 1
     log: "logs/guess_encoding.log"
     script: "scripts/guest-encoding.py"
 
 rule add_demultiplex_info_to_fastq:
     input:
-        reads1="reads1.fastq",
-        reads2="reads2.fastq",
-        map1="1.map.txt",
-        map2="2.map.txt",
+        reads="reads1.fastq",
+        map="1.map.txt",
         encoding="encoding.txt",
         barcodes="barcodes.fastq"
     output:
-        labelled_reads_F = "demultiplex_r1/seqs.fastq",
-        labelled_reads_R = "demultiplex_r2/seqs.fastq"
+        labelled_reads = "demultiplex_r1/seqs.fastq",
     params:
-        demultiplex_r1= "demultiplex_r1",
-        demultiplex_r2= "demultiplex_r2"
-    log: "logs/add_demultiplex_info.log"
+        demultiplex= "demultiplex_r1",
     container: "docker://ghcr.io/vdblab/qiime:1.9.1"
-#    conda: "envs/py2.yaml"
     message: "05 - labelling reads with sample id"
     shell: """
-    echo "spliting out forward libraries" >> {log}
-    split_libraries_fastq.py -i {input.reads1} -o {params.demultiplex_r1} -b {input.barcodes} --store_demultiplexed_fastq -q 0 -s 100000000 -m {input.map1} --barcode_type 12 --max_barcode_errors 4 -n 5000 -p 0.00001 -r 1000000 --phred_offset `cut {input.encoding} -f2`
-    echo "splitting out reverse libraries" >> {log}
-    split_libraries_fastq.py -i {input.reads2} -o {params.demultiplex_r2} -b {input.barcodes} --store_demultiplexed_fastq -q 0 -s 100000000 -m {input.map2} --barcode_type 12 --max_barcode_errors 4 -n 5000 -p 0.00001 -r 1000000 --phred_offset `cut {input.encoding} -f2`
+    split_libraries_fastq.py -i {input.reads} -o {params.demultiplex} -b {input.barcodes} --store_demultiplexed_fastq -q 0 -s 100000000 -m {input.map} --barcode_type 12 --max_barcode_errors 4 -n 5000 -p 0.00001 -r 1000000 --phred_offset `cut {input.encoding} -f2`
+    if [ -f "scrap.fastq" ]
+    then
+      rm scrap.fastq
+    fi
+    """
 
-   rm reads1.fastq
-   rm reads2.fastq
-   rm scrap.fastq
-   echo "done" >> {log}
-   """
+use rule add_demultiplex_info_to_fastq as add_demultiplex_info_to_fastq_R2 with:
+    input:
+        reads="reads2.fastq",
+        map="2.map.txt",
+        encoding="encoding.txt",
+        barcodes="barcodes.fastq"
+    output:
+        labelled_reads = "demultiplex_r2/seqs.fastq"
+    params:
+        demultiplex= "demultiplex_r2"
 
 rule set_up_dummy_files:
     input:
@@ -189,9 +195,12 @@ rule demultiplex:
         reads2="isolated_oligos/{sampleid}_R2.fastq.gz"
 
     log: "logs/demultiplex_{sampleid}.log"
+    threads: 1
     container: "docker://ghcr.io/vdblab/qiime:1.9.1"
-#    conda: "envs/py2.yaml"
     message: "06 - extracting reads for sample"
+    resources:
+        mem_mb=16 * 1024,
+        runtime = lambda wc, attempt: 4 * 60 * attempt,
     shell: """
     sampleid=$(cat {input.sampleid_file})
     temp_file=temp"$sampleid".txt
@@ -226,14 +235,11 @@ rule run_dada2:
         counts = "dada2_results/asv_counts.csv"
     container: "docker://ghcr.io/vdblab/dada2legacy:1.18.0"
     log: "logs/dada2script.log"
-    threads: 8 # this is hardcoded in dadascript_noprior_ag.R.  For now...
+    threads: 16
+    resources:
+        mem_mb=48 * 1024,
+        runtime = lambda wc, attempt: 12 * 60 * attempt,
     message: "07 - Identifying ASVs with DADA2"
-    #container: "docker.pkg.github.com://vdblab/vdblab-pipelines/16s-r:548aae2c1be691d2dde659fe38e4efe0d7849906"
-    # shell: """
-    # ls
-    # R -e 'packageVersion("dada2"); packageVersion("ShortRead")'
-    # Rscript AG_16S/Docker/dadascript_noprior_ag.R isolated_oligos
-    # """
     script: "scripts/dadascript_noprior_ag.R"
 
 
@@ -246,6 +252,10 @@ rule run_ASV_annotation:
         annotated_asvs="dada2_results/blast_out/ASV_annotated.txt",
         blast = "dada2_results/blast_out/blast_passed_not_passed.txt",
     message: "08 - Annotating ASVs with BLAST"
+    threads: 8 # hardcoded for now
+    resources:
+        mem_mb=16 * 1024,
+        runtime = lambda wc, attempt: 4 * 60 * attempt,
     log: "logs/blast_asvs.log"
     container: "docker://ghcr.io/vdblab/legacyampliconblast:0.0.1"
     script: "scripts/blast_simplified_dada2_cl.R"

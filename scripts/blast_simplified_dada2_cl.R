@@ -68,7 +68,7 @@ blast.function <- function(fasta_file, output_path, re_run=T){
 
     #provide the directory info for blastn unix executable
     #cmds<-paste("/Users/rrjenq/miniconda2/bin/blastn -db 16SMicrobial -query", fasta_file, "-outfmt \"6 qseqid staxids saccver stitle qlen length nident pident bitscore score\" -out results.txt", sep=" ")
-    cmds<-paste("blastn -db", database_file," -max_target_seqs 500 -query", fasta_file, "-outfmt \"6 qseqid staxids saccver stitle qlen length nident pident bitscore evalue score\" -out", out_results, sep=" ")
+    cmds<-paste("blastn -db", database_file," -max_target_seqs 500  -num_threads 8 -query", fasta_file, "-outfmt \"6 qseqid staxids saccver stitle qlen length nident pident bitscore evalue score\" -out", out_results, sep=" ")
     #print(cmds);
     #Sep/26/2018: I added `max_target_seqs` to make sure we query enough sequences. There is risk of bias using a small number of target sequences: https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/bty833/5106166
     sapply(cmds, system)  # takes ~30 min to run on Melissa's computer
