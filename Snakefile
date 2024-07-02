@@ -7,46 +7,22 @@ envvars:
 configfile: os.path.join(workflow.basedir, "config/config.yaml")
 
 
-def get_files_from_input_dir(config):
-    # we dont print by default without the verbose option  cause this issue:
-    # https://github.com/snakemake/snakemake/issues/1297
-    # print("getting input fastqs from " + config["input_directory"])
-    files = glob.glob(config["input_directory"] + "/*f*q*")
-    if not [x for x in files if "R1_001.f" in x]:
-        raise ValueError("Pattern 'R1_001.f' not found in input files; please double check and/or fix names")
-    # print(files)
-    oligos_files = glob.glob(config["input_directory"] + "/*.oligos")
-    #print(oligos_files)
-    files_dict = {
-        "readsf": [x for x in files if "R1_001.f" in x],
-        "readsr": [x for x in files if "R2_001.f" in x],
-        "oligos": oligos_files[0]
+# skip a schema for now:
+for req in ["R1", "R2", "oligos", "blast_db", "blast_anno"]:
+    assert req in config, f"config argument {req} is mandatory"
+
+input_files =  {
+        "readsf": config["R1"],
+        "readsr": config["R2"],
+        "oligos": config["oligos"]
     }
-    for k,v in files_dict.items():
-        #print("   :-:", k, ": ", v)
-        if v == None:
-            raise ValueError("Unable to find required {} file in input directory".format(k))
-    return files_dict
-
-input_files = get_files_from_input_dir(config)
 
 
-
-def get_files_from_db_dir(config):
-    #print("getting paths for database files in " + config["db_directory"])
-    db_base = "bacteria_and_archea.16SrRNA.fna"
-    anno_base = "bacteria_and_archea.16SrRNA.id_and_taxonomy_v2.txt"
-    files_dict = {
-        "db":   glob.glob(config["db_directory"] + "/*" + db_base)[0],
-        "anno": glob.glob(config["db_directory"] + "/*" + anno_base)[0]
+db_files = {
+        "db":   config["blast_db"],
+        "anno": config["blast_anno"]
     }
-    for k,v in files_dict.items():
-        #print("   :-:", k, ": ", v)
-        if v == None:
-            raise ValueError("Unable to find required {} file in db directory".format(k))
-    return files_dict
 
-db_files = get_files_from_db_dir(config)
 
 
 samp_id_taboo_chars = '[_%+;: -]+'
@@ -62,7 +38,9 @@ with open (input_files["oligos"], "r") as inf:
             thisid = id_pool.split("..")[0]
             # borrowed this regex from the barcode cleaning script
             cleanid = re.sub(samp_id_taboo_chars,'.',thisid)
-            samples.append(id_pool.replace(thisid, cleanid))
+            thissample = id_pool.replace(thisid, cleanid)
+            assert thissample not in samples, "Error: duplicate samples detected in oligos file"
+            samples.append(thissample)
 
 
 onstart:
@@ -107,19 +85,19 @@ rule remove_primers:
     script: "scripts/strip_addons3_py3.py"
 
 
-rule clean_oligos:
-    input: input_dir = config["input_directory"]
-    output: oligos=os.path.basename(input_files["oligos"]) + ".clean"
-    container: "docker://ghcr.io/vdblab/dada2legacy:1.18.0"
-    message: "02 - cleaning oligos file"
-    threads: 1
-    log: "logs/oligo_cleaning.log"
-    script: "scripts/oligos_cleaning_cl.R"
+# rule clean_oligos:
+#     input: oligos = config["oligos"]
+#     output: oligos=os.path.basename(input_files["oligos"]) + ".clean"
+#     container: "docker://ghcr.io/vdblab/dada2legacy:1.18.0"
+#     message: "02 - cleaning oligos file"
+#     threads: 1
+#     log: "logs/oligo_cleaning.log"
+#     script: "scripts/oligos_cleaning_cl.R"
 
 
 rule convert_oligos_to_mapping_file:
     input:
-        oligosfile=os.path.basename(input_files["oligos"]) + ".clean"
+        oligosfile=input_files["oligos"]
     output:
         "1.map.txt",
         "2.map.txt"
