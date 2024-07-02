@@ -11,11 +11,5 @@
 
 ### Usage
 ```
-snakemake --cores 4 --use-conda --use-singularity --snakefile ./AG_16S/Snakefile --config input_directory=/mnt/disk1/test_data/ db_directory=/mnt/disk1/16S_blast/ --directory output
-```
-
-For example, submitting a job via snakemake would be:
-
-```
-snakemake --jobs 32 --use-conda  --use-singularity --snakefile AG_16S/Snakefile --config input_directory=/home/daia1/my_workdir/other_pipeline/dada2/test/ trunclen=180 minasvlen=300 ncores=32  db_directory=/data/brinkvd/resources/ --directory results/ --cluster 'bsub -n 32 -R "rusage[mem=4]" -W 12:00 -e pipeline.err -o pipeline.out'
+snakemake --cores 4 --use-conda --use-singularity  --config trunclen=180 minasvlen=300 input_directory=$PWD/test/test_input/ db_directory=/data/brinkvd/resources_old/ --directory $PWD/output
 ```

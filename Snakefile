@@ -56,13 +56,14 @@ with open (input_files["oligos"], "r") as inf:
     for line in inf:
         if line.startswith("BARCODE"):
             id_pool = line.split()[3]
+            if ".." not in id_pool:
+                print(f"Line with misspecified oligo_id:\n{line}")
+                raise ValueError("To maintain compatibility with previous pipeline runs, the oligos file must be specified as {sampleid}..{pool} in the 4th column.  Exiting")
             thisid = id_pool.split("..")[0]
-            pool = os.path.basename(input_files["oligos"]).split("_")[0].replace(".oligos", "")
             # borrowed this regex from the barcode cleaning script
-            if re.search(samp_id_taboo_chars, thisid):
-                samples.append(re.sub(samp_id_taboo_chars,'.',thisid) + ".." + pool)
-            else:
-                samples.append(thisid + ".." + pool)
+            cleanid = re.sub(samp_id_taboo_chars,'.',thisid)
+            samples.append(id_pool.replace(thisid, cleanid))
+
 
 onstart:
     print("Samples found in oligos file:\n- " + "\n- ".join(samples))
@@ -107,8 +108,6 @@ rule remove_primers:
 rule clean_oligos:
     input: input_dir = config["input_directory"]
     output: oligos=os.path.basename(input_files["oligos"]) + ".clean"
-#    container: "docker://rocker/r-base:4.0.0"
-    #conda: "envs/dada2.yaml"
     container: "docker://ghcr.io/vdblab/dada2legacy:1.18.0"
     message: "02 - cleaning oligos file"
     log: "logs/oligo_cleaning.log"
