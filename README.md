@@ -5,7 +5,7 @@
 
 - Snakemake
 - singularity
-- A snakemake profile set to use singularity
+- A snakemake profile set to `--use-singularity`
 
 ### Config Parameters
 
@@ -19,5 +19,5 @@
 
 ### Usage
 ```
-snakemake --cores 4 --use-conda --use-singularity  --config trunclen=180 minasvlen=300 R1=[$PWD/test/test_input/test_R1_001.fastq.gz] R2=[$PWD/test/test_input/test_R2_001.fastq.gz] oligos=$PWD/test/test_input/pool1059.oligos  blast_db=/data/brinkvd/resources_old/bacteria_and_archea.16SrRNA.fna blast_anno=/data/brinkvd/resources_old/bacteria_and_archea.16SrRNA.id_and_taxonomy_v2.txt --directory $PWD/output
+snakemake  --config trunclen=180 minasvlen=300 R1=[$PWD/test/test_input/test_R1_001.fastq.gz] R2=[$PWD/test/test_input/test_R2_001.fastq.gz] oligos=$PWD/test/test_input/pool1059.oligos  blast_db=/data/brinkvd/resources_old/bacteria_and_archea.16SrRNA.fna blast_anno=/data/brinkvd/resources_old/bacteria_and_archea.16SrRNA.id_and_taxonomy_v2.txt --directory $PWD/output
 ```

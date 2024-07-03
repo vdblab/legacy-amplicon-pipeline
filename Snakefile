@@ -51,7 +51,8 @@ rule all:
         "dada2_results/blast_out/ASV_annotated.txt",
         "dada2_results/ASV_sequences.fasta",
         "dada2_results/asv_counts.csv",
-        "dada2_results/blast_out/blast_passed_not_passed.txt"
+        "dada2_results/blast_out/blast_passed_not_passed.txt",
+        "multiqc/multiqc_report.html",
 
 rule merge_lanes_if_needed:
     input:
@@ -219,6 +220,42 @@ rule run_dada2:
         runtime = lambda wc, attempt: 12 * 60 * attempt,
     message: "07 - Identifying ASVs with DADA2"
     script: "scripts/dadascript_noprior_ag.R"
+
+rule sample_fastqc_report:
+    input:
+        readsf="isolated_oligos/{sample}_R1.fastq.gz",
+        readsr="isolated_oligos/{sample}_R2.fastq.gz",
+    output:
+        report_R1="fastqc_reports/{sample}_R1_fastqc.html",
+        report_R2="fastqc_reports/{sample}_R2_fastqc.html",
+        zip_R1="fastqc_reports/{sample}_R1_fastqc.zip",
+        zip_R2="fastqc_reports/{sample}_R2_fastqc.zip",
+    params:
+        outdir=lambda wildcards, output: os.path.dirname(output[0]),
+    container:
+        "docker://staphb/fastqc:0.11.9"
+    threads: 2
+    resources:
+        mem_mb=4 * 1024,
+    shell:
+        """
+        fastqc \
+            --outdir {params.outdir} \
+            --threads {threads} \
+            --noextract \
+            {input}
+        """
+rule multiqc:
+    input:
+        readsf=expand("fastqc_reports/{sample}_R1_fastqc.html", sample=samples),
+    output:
+        "multiqc/multiqc_report.html"
+    container: "docker://ewels/multiqc:v1.12"
+    shell:"""
+            multiqc        -o multiqc \
+            --force --filename multiqc_report.html ./
+    """
+
 
 
 rule run_ASV_annotation:
