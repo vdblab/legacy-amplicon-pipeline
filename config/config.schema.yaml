@@ -1,0 +1,22 @@
+---
+$schema: "https://json-schema.org/draft/2020-12/schema"
+
+description: AG_16S config schema
+
+type: object
+
+properties:
+  # inputs
+  oligos:
+    type: string
+  R1:
+    type: array
+    items:
+      type: string
+    minItems: 1
+    uniqueItems: true
+  R2:
+    type: array
+    items:
+      type: string
+    uniqueItems: true
