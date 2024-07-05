@@ -1,7 +1,10 @@
 import glob
+import gzip
 import os
-envvars:
-    "HOME"
+from contextlib import redirect_stderr
+import traceback
+import pandas as pd
+
 
 
 configfile: os.path.join(workflow.basedir, "config/config.yaml")
@@ -53,6 +56,7 @@ rule all:
         "dada2_results/asv_counts.csv",
         "dada2_results/blast_out/blast_passed_not_passed.txt",
         "multiqc/multiqc_report.html",
+        "demux/manifest.tsv",
 
 rule merge_lanes_if_needed:
     input:
@@ -196,6 +200,69 @@ rule demultiplex:
     touch tmp
     """
 
+# https://stackoverflow.com/questions/37874936/how-to-check-empty-gzip-file-in-python
+def gz_size(fname):
+    with gzip.open(fname, "rb") as f:
+        return f.seek(0, whence=2)
+
+def write_manifest_and_missing(
+    sample_ids, fastq_template, manifest_path, missing_path, paired=True
+):
+    R1 = []
+    R2 = []
+    for s in sample_ids:
+        R1_path = fastq_template.format(sample=s, dir=1)
+        if os.path.exists(R1_path) and gz_size(R1_path) > 0:
+            R1.append(R1_path)
+        else:
+            R1.append("")
+
+        R2_path = fastq_template.format(sample=s, dir=2)
+        if os.path.exists(R2_path) and gz_size(R2_path) > 0:
+            R2.append(R2_path)
+        else:
+            R2.append("")
+
+    manifest = pd.DataFrame({"sample_id": sample_ids, "R1": R1, "R2": R2})
+    manifest = manifest[["sample_id", "R1", "R2"]]
+    if paired:
+        is_incomplete = (manifest["R1"] == "") | (manifest["R2"] == "")
+    else:
+        is_incomplete = manifest["R1"] == ""
+
+    manifest[is_incomplete].to_csv(missing_path, sep="\t", index=False)
+
+    manifest = manifest[~is_incomplete]
+    manifest.to_csv(manifest_path, sep="\t", index=False)
+
+rule output_manifest:
+    """
+    Output a file with sample ids extracted from the oligo files,
+    and demultiplexed R1 and R1 fastq files
+    """
+    input:
+        expand(
+            "isolated_oligos/{sample}_R{dir}.fastq.gz",
+            sample=samples,
+            dir=[1, 2],
+        ),
+    output:
+        manifest=f"demux/manifest.tsv",
+        missing=f"demux/missing_or_incomplete.tsv",
+    log:
+        e=f"log/output_manifest.e",
+    run:
+        with open(log.e, "w") as ef, redirect_stderr(ef):
+            try:
+                fastq_template = os.path.join(
+                    os.getcwd(), "isolated_oligos/{sample}_R{dir}.fastq.gz"
+                )
+                write_manifest_and_missing(
+                    samples, fastq_template, output["manifest"], output["missing"]
+                )
+            except Exception as e:
+                traceback.print_exc(file=ef)
+
 
 rule run_dada2:
     # the input_fastqs acts as a gather signal, waiting for all the fastqs to be available
@@ -245,6 +312,7 @@ rule sample_fastqc_report:
             --noextract \
             {input}
         """
+
 rule multiqc:
     input:
         readsf=expand("fastqc_reports/{sample}_R1_fastqc.html", sample=samples),
