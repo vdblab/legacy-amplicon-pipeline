@@ -124,7 +124,7 @@ rule guess_encoding_of_fastq:
     message: "04 - determining the encoding of the FASTQ quality scores"
     threads: 1
     log: "logs/guess_encoding.log"
-    script: "scripts/guest-encoding.py"
+    script: "scripts/guess-encoding.py"
 
 rule add_demultiplex_info_to_fastq:
     input:

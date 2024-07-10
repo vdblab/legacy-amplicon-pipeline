@@ -1,17 +1,4 @@
-# Apr 2021 NRW updated to remove path dependencies
-#Jun/24/2019
-#I updated this script to make it run using ASV reads from DADA2.
-#
-#
-#
-#following script requires first installing blastn and the 16SMicrobial database
-#ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.2.30/ncbi-blast-2.2.30+.dmg
-#ftp://ftp.ncbi.nlm.nih.gov/blast/db/16SMicrobial.tar.gz.md5
-#
-#blastn will install automatically into /usr/local/ncbi/blast/bin/
-#16S database - put this in the working directory, along with the FASTSA file
-
-library(data.table);
+library(data.table)
 
 if (exists("snakemake")){
                                         #print(str(snakemake))
@@ -32,8 +19,6 @@ args = snakemake@input
 
 re_run_boolean=T
 
-#stop("TO BE DONE!");
-
 dir.create(output_path)
 
 print("Parsing annotation file")
@@ -47,9 +32,6 @@ if(! all(colnames(dt_annotation) == c("accession_id", "tax_id_species", "taxon")
 
 rownames(dt_annotation) = dt_annotation$accession_id;
 
-#Jan/28/2020: Instead of using annotation_map, I will use dt_annotation as a data.frame
-#annotation_map <- dt_annotation$taxon;
-#names(annotation_map) <- dt_annotation$accession_id;
 
 
 library(plyr)
@@ -67,17 +49,14 @@ blast.function <- function(fasta_file, output_path, re_run=T){
     if (file.exists(out_results)) file.remove(out_results)
 
     #provide the directory info for blastn unix executable
-    #cmds<-paste("/Users/rrjenq/miniconda2/bin/blastn -db 16SMicrobial -query", fasta_file, "-outfmt \"6 qseqid staxids saccver stitle qlen length nident pident bitscore score\" -out results.txt", sep=" ")
     cmds<-paste("blastn -db", database_file," -max_target_seqs 500  -num_threads 8 -query", fasta_file, "-outfmt \"6 qseqid staxids saccver stitle qlen length nident pident bitscore evalue score\" -out", out_results, sep=" ")
     #print(cmds);
     #Sep/26/2018: I added `max_target_seqs` to make sure we query enough sequences. There is risk of bias using a small number of target sequences: https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/bty833/5106166
-    sapply(cmds, system)  # takes ~30 min to run on Melissa's computer
+    sapply(cmds, system)  # takes ~30 min
   }
   #if error, may need to manually delete results.txt
 
-  #results <- read.delim("results.txt", header=FALSE)
   results <- fread(out_results, sep="\t",header=FALSE,stringsAsFactors=FALSE)
-  #colnames(results)<-c("ASVId","taxid","accession","species","align_length","pident","expect_value")
   setnames(results, c("ASVId", "taxid", "accession", "species", "query_length", "align_length", "nident", "pident", "bitscore", "evalue", "score"))
 
   results$tax_id_species = dt_annotation[as.character(results$accession),"tax_id_species"];
@@ -101,9 +80,7 @@ blast.function <- function(fasta_file, output_path, re_run=T){
     name<-paste(paste(unique(results_ASV_top$species_short),collapse=";"),results_ASV$align_length[1],results_ASV$pident[1],sep=";")
 
     #generate a unique name with the oldest taxid
-    #results_ASV_top<-results_ASV_top[order(as.numeric(results_ASV_top$taxid)),]
     results_ASV_top<-results_ASV_top[order(as.numeric(results_ASV_top$tax_id_species)),]
-    #results_ASV_top<-results_ASV_top[order(as.numeric(results_ASV_top$taxid)),]
     old_taxid<-results_ASV_top$taxid[1]
     accession<-results_ASV_top$accession[1];
     unique_name<-results_ASV_top$species_short[1]
@@ -125,12 +102,6 @@ blast.function <- function(fasta_file, output_path, re_run=T){
 }
 
 
-#paste name of fasta file here
-#print(output_path)
-#setwd(output_path);
-#fasta<-"total.4.clustered.fasta"
-#fasta<-"total.5.repset-raw.fasta"
-#fasta<-"total.5.repset-raw.fasta"
 print("executing blast")
 blasted <- blast.function(fasta_file = fasta_file, output_path=output_path,re_run=re_run_boolean)
 print("Filtering blast results")
@@ -167,20 +138,11 @@ save_blast_detailed = sprintf("%sblast_passed_not_passed.txt",output_file_base);
 
 #The output of blast is send to this file to be load in database.
 write.table(blasted_passed, save_blast_passed, sep="\t", row.names=F);
-#"~/projects/human_microbiota/data/16S/Blast/blast_on_raw_May252017.txt", sep="\t");
 write.table(blasted_not_passed, save_blast_not_passed, sep="\t", row.names=F);
-#"~/projects/human_microbiota/data/16S/Blast/blast_not_passed_on_raw_May252017.txt", sep="\t");
 write.table(rbind(blasted_passed,blasted_not_passed), save_blast_detailed, sep="\t", row.names=F);
 
-#print(colnames(blasted_passed));
-#print(colnames(blasted_not_passed));
-#print(length(blasted_passed$ASVId))
-#print(length(blasted_passed$taxid));
-#print(length(blasted_not_passed$ASVId))
-#print(length(blasted_not_passed$taxid));
 
 if(length(blasted_passed$ASVId)){
-#ASV_annotated_p1 <- data.frame( asv_temp_id = blasted_passed$ASVId, blast_pass=T, accession=blasted_passed$accession, annotation=annotation_map[as.character(blasted_passed$accession)], pident=blasted_passed$pident)
   ASV_annotated_p1 <- data.frame( asv_temp_id = blasted_passed$ASVId,
                                   blast_pass=T,
                                   accession=blasted_passed$accession,
@@ -191,7 +153,6 @@ if(length(blasted_passed$ASVId)){
                                   score=blasted_passed$score)
 }
 if(length(blasted_not_passed$ASVId)){
-#ASV_annotated <- data.frame( asv_temp_id = blasted_not_passed$ASVId, blast_pass=F, accession=blasted_not_passed$accession, annotation=annotation_map[as.character(blasted_not_passed$accession)], pident=blasted_not_passed$pident);
   ASV_annotated <- data.frame( asv_temp_id = blasted_not_passed$ASVId,
                                blast_pass=F,
                                accession=blasted_not_passed$accession,

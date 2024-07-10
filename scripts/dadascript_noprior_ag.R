@@ -81,7 +81,7 @@ sprintf("%s - before capping",Sys.time())
 Nread_cap=1e5
 
 file.remove(dir( dirname(filtFs[1]),pattern="temp",full.names=T ))
-do_capping=T;#F;
+do_capping=T
 
 if(do_capping){
 

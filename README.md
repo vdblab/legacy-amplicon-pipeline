@@ -1,11 +1,11 @@
-## `AG_16S` pipeline
+## Legacy pipeline
 
 
 ### Environment Prerequisites
 
 - Snakemake
-- singularity
-- A snakemake profile set to `--use-singularity`
+- Singularity
+- A snakemake profile configured and the `SNAKEMAKE_PROFILE` variable set
 
 ### Config Parameters
 

@@ -9,8 +9,6 @@
 #5. Creates a bkp file (.pre_cleaning.bkp) only if it does not pre-exist.
 #
 
-#data_path="~/projects/human_microbiota/data/16S/dada2/temp_Sample_pooltest_complete/"
-
 #args = commandArgs(trailingOnly = T);
 
 #data_path=args[[1]];
