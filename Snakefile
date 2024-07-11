@@ -83,6 +83,9 @@ rule remove_primers:
     container: "docker://ghcr.io/vdblab/biopython:1.70a"
     log: "logs/primer_removal.log"
     message: "01 - removing primer sequences from fastq pools"
+    resources:
+        mem_mb=lambda wc, attempt: 12 * 1024 * attempt,
+        runtime=lambda wc, attempt: 4 * 60 * attempt,
     threads: 1
     params:
         primerf=config['primerf'],
@@ -137,13 +140,16 @@ rule add_demultiplex_info_to_fastq:
     params:
         demultiplex= "demultiplex_r1",
     container: "docker://ghcr.io/vdblab/qiime:1.9.1"
+    resources:
+        mem_mb=lambda wc, attempt: 12 * 1024 * attempt,
+        runtime=lambda wc, attempt: 4 * 60 * attempt,
     message: "05 - labelling reads with sample id"
     shell: """
     split_libraries_fastq.py -i {input.reads} -o {params.demultiplex} -b {input.barcodes} --store_demultiplexed_fastq -q 0 -s 100000000 -m {input.map} --barcode_type 12 --max_barcode_errors 4 -n 5000 -p 0.00001 -r 1000000 --phred_offset `cut {input.encoding} -f2`
-    if [ -f "scrap.fastq" ]
-    then
-      rm scrap.fastq
-    fi
+#    if [ -f "scrap.fastq" ]
+#    then
+#      rm scrap.fastq
+#    fi
     """
 
 use rule add_demultiplex_info_to_fastq as add_demultiplex_info_to_fastq_R2 with:
