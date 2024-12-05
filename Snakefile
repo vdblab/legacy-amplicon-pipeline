@@ -273,6 +273,7 @@ rule output_manifest:
             sample=samples,
             dir=[1, 2],
         ),
+	"isolated_oligos/Unassigned_R1.fastq.gz",
     output:
         manifest=f"demux/manifest.tsv",
         missing=f"demux/missing_or_incomplete.tsv",
