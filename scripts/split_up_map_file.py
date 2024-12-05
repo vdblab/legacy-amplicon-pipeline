@@ -12,6 +12,9 @@ def main(infile, outdir):
                 print("  - " + samp)
                 with open(os.path.join(outdir, samp + ".sample"), "w") as outf:
                     outf.write(samp + "\n")
+    # add an unassigned one
+    with open(os.path.join(outdir,"Unassigned.sample"), "w") as outf:
+        outf.write("Unassigned" + "\n")
 
 
 with open(snakemake.log[0], "w") as f:

@@ -45,6 +45,12 @@ with open (input_files["oligos"], "r") as inf:
             assert thissample not in samples, "Error: duplicate samples detected in oligos file"
             samples.append(thissample)
 
+# we add "Unassigned" to samples in some outputs
+# see http://qiime.org/scripts/split_libraries_fastq.html
+
+localrules:
+   all,
+   output_manifest,
 
 onstart:
     print("Samples found in oligos file:\n- " + "\n- ".join(samples))
@@ -57,6 +63,8 @@ rule all:
         "dada2_results/blast_out/blast_passed_not_passed.txt",
         "multiqc/multiqc_report.html",
         "demux/manifest.tsv",
+	"isolated_oligos/Unassigned_R1.fastq.gz",
+	"isolated_oligos/Unassigned_R2.fastq.gz",
 
 rule merge_lanes_if_needed:
     input:
@@ -91,7 +99,6 @@ rule remove_primers:
         primerf=config['primerf'],
         primerr=config['primerr']
     script: "scripts/strip_addons3_py3.py"
-
 
 # rule clean_oligos:
 #     input: oligos = config["oligos"]
@@ -137,6 +144,7 @@ rule add_demultiplex_info_to_fastq:
         barcodes="barcodes.fastq"
     output:
         labelled_reads = "demultiplex_r1/seqs.fastq",
+	fna = temp("demultiplex_r1/seqs.fna"),
     params:
         demultiplex= "demultiplex_r1",
     container: "docker://ghcr.io/vdblab/qiime:1.9.1"
@@ -145,11 +153,7 @@ rule add_demultiplex_info_to_fastq:
         runtime=lambda wc, attempt: 4 * 60 * attempt,
     message: "05 - labelling reads with sample id"
     shell: """
-    split_libraries_fastq.py -i {input.reads} -o {params.demultiplex} -b {input.barcodes} --store_demultiplexed_fastq -q 0 -s 100000000 -m {input.map} --barcode_type 12 --max_barcode_errors 4 -n 5000 -p 0.00001 -r 1000000 --phred_offset `cut {input.encoding} -f2`
-#    if [ -f "scrap.fastq" ]
-#    then
-#      rm scrap.fastq
-#    fi
+    split_libraries_fastq.py -i {input.reads} -o {params.demultiplex} -b {input.barcodes} --store_demultiplexed_fastq -q 0 -s 100000000 -m {input.map} --barcode_type 12 --max_barcode_errors 4 -n 5000 -p 0.00001 -r 1000000 --retain_unassigned_reads --phred_offset `cut {input.encoding} -f2`
     """
 
 use rule add_demultiplex_info_to_fastq as add_demultiplex_info_to_fastq_R2 with:
@@ -159,7 +163,8 @@ use rule add_demultiplex_info_to_fastq as add_demultiplex_info_to_fastq_R2 with:
         encoding="encoding.txt",
         barcodes="barcodes.fastq"
     output:
-        labelled_reads = "demultiplex_r2/seqs.fastq"
+        labelled_reads = "demultiplex_r2/seqs.fastq",
+	fna = temp("demultiplex_r2/seqs.fna"),
     params:
         demultiplex= "demultiplex_r2"
 
@@ -170,6 +175,7 @@ rule set_up_dummy_files:
         sampleid_dir= "sampleids"
     output:
         sampleid_files= expand("sampleids/{i}.sample", i=samples),
+	unassigned_file = "sampleids/Unassigned.sample"
     message: "05.5 - splitting up map file for distributed demultiplexing"
     log: "logs/split_map.log"
     script: "scripts/split_up_map_file.py"
@@ -195,7 +201,6 @@ rule demultiplex:
     temp_file=temp"$sampleid".txt
     echo $sampleid > $temp_file
 
-    if [ ! -d isolated_oligos ]; then mkdir isolated_oligos; fi
     a=`date`
     echo "$a: Extracting sampleid $sampleid" >> {log}
     filter_fasta.py -f {input.reads1} --sample_id_fp {input.sampleid_file} -o isolated_oligos/${{sampleid}}_R1.fastq 2>> {log}
@@ -205,6 +210,17 @@ rule demultiplex:
     rm $temp_file
     touch tmp
     """
+
+use rule demultiplex as demultiplex_unassigned with:
+    input:
+        reads1="demultiplex_r1/seqs.fastq",
+        reads2="demultiplex_r2/seqs.fastq",
+        sampleid_file="sampleids/Unassigned.sample"
+    output:
+        reads1="isolated_oligos/Unassigned_R1.fastq.gz",
+        reads2="isolated_oligos/Unassigned_R2.fastq.gz"
+
+    log: "logs/demultiplex_Unassigned.log"
 
 # https://stackoverflow.com/questions/37874936/how-to-check-empty-gzip-file-in-python
 def gz_size(fname):
@@ -228,15 +244,20 @@ def write_manifest_and_missing(
             R2.append(R2_path)
         else:
             R2.append("")
-
     manifest = pd.DataFrame({"sample_id": sample_ids, "R1": R1, "R2": R2})
+    unassigned_manifest = pd.DataFrame({
+        "sample_id": "Unassigned",
+        "R1":[fastq_template.format(sample="Unassigned", dir=1)],
+	"R2": [fastq_template.format(sample="Unassigned", dir=2)],
+	})
     manifest = manifest[["sample_id", "R1", "R2"]]
+    unassigned_manifest = unassigned_manifest[["sample_id", "R1", "R2"]]
     if paired:
         is_incomplete = (manifest["R1"] == "") | (manifest["R2"] == "")
     else:
         is_incomplete = manifest["R1"] == ""
 
-    manifest[is_incomplete].to_csv(missing_path, sep="\t", index=False)
+    pd.concat([manifest[is_incomplete], unassigned_manifest]).to_csv(missing_path, sep="\t", index=False)
 
     manifest = manifest[~is_incomplete]
     manifest.to_csv(manifest_path, sep="\t", index=False)
