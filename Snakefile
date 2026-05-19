@@ -50,7 +50,7 @@ with open (input_files["oligos"], "r") as inf:
 
 def get_num_shards(read_f, read_r):
     """Calculate number of shards based on file size (1-20 shards)"""
-    total_size = os.path.getsize(reads_f) + os.path.getsize(reads_r)
+    total_size = os.path.getsize(read_f) + os.path.getsize(read_r)
     size_gb = total_size / (1024**3)
     print(size_gb)
     return max(1, min(20, math.ceil(size_gb))) #20 seemed like a reasonable upper limit
