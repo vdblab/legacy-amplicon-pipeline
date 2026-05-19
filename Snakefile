@@ -48,14 +48,14 @@ with open (input_files["oligos"], "r") as inf:
 # we add "Unassigned" to samples in some outputs
 # see http://qiime.org/scripts/split_libraries_fastq.html
 
-def get_num_shards(sample):
+def get_num_shards():
     """Calculate number of shards based on file size (1-20 shards)"""
     try:
-        fq1_size = os.path.getsize(MANIFEST.loc[sample, "R1"])
-        total_size = fq1_size
-        if is_paired():
-            fq2_size = os.path.getsize(MANIFEST.loc[sample, "R2"])
-            total_size += fq2_size
+        total_size = 0
+        for f in input_files["readsf"]:
+            total_size += os.path.getsize(f)
+        for f in input_files["readsr"]:
+            total_size += os.path.getsize(f)
         
         size_gb = total_size / (1024**3)
         return max(1, min(20, math.ceil(size_gb))) #20 seemed like a reasonable upper limit
