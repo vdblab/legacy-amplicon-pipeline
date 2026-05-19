@@ -48,6 +48,20 @@ with open (input_files["oligos"], "r") as inf:
 # we add "Unassigned" to samples in some outputs
 # see http://qiime.org/scripts/split_libraries_fastq.html
 
+def get_num_shards_for_sample(sample):
+    """Calculate number of shards based on file size (1-20 shards)"""
+    try:
+        fq1_size = os.path.getsize(MANIFEST.loc[sample, "R1"])
+        total_size = fq1_size
+        if is_paired():
+            fq2_size = os.path.getsize(MANIFEST.loc[sample, "R2"])
+            total_size += fq2_size
+        
+        size_gb = total_size / (1024**3)
+        return max(1, min(20, math.ceil(size_gb))) #20 seemed like a reasonable upper limit
+    except:
+        return 1
+
 localrules:
    all,
    output_manifest,
@@ -80,17 +94,49 @@ rule merge_lanes_if_needed:
         cat {input.readsr} >> reads2.fastq.gz
         """
 
-rule remove_primers:
+checkpoint split_fastq:
     input:
         readsf = "reads1.fastq.gz",
         readsr = "reads2.fastq.gz"
     output:
-        readsf=temp("reads1.fastq"),
-        readsr=temp("reads2.fastq"),
-        barcodes="barcodes.fastq",
+        directory("chunks")
+    run:
+        import subprocess
+        
+        # Calculate number of shards
+        num_shards = get_num_shards()
+        
+        # Create output directory
+        os.makedirs(output[0], exist_ok=True)
+        
+        if num_shards == 1:
+            # Just symlink for single shard
+            shell(f"ln -sf $(realpath {input.readsf}) {output[0]}/chunk_00_R1.fastq.gz")
+            shell(f"ln -sf $(realpath {input.readsr}) {output[0]}/chunk_00_R2.fastq.gz")
+        else:
+            # Count reads for splitting
+            total_lines = int(subprocess.check_output(f"zcat {input.readsf} | wc -l", shell=True).decode().strip())
+            reads_per_shard = max(1, math.ceil((total_lines // 4) / num_shards))
+            lines_per_shard = reads_per_shard * 4
+            
+            # Split R1 and R2
+            shell(f"zcat {input.readsf} | split -l {lines_per_shard} -d --additional-suffix='_R1.fastq' - {output[0]}/chunk_")
+            shell(f"zcat {input.readsr} | split -l {lines_per_shard} -d --additional-suffix='_R2.fastq' - {output[0]}/chunk_")
+            
+            # Gzip the chunks
+            shell(f"gzip {output[0]}/chunk_*.fastq")
+
+rule remove_primers_chunk:
+    input:
+        readsf = "chunks/chunk_{chunk}_R1.fastq.gz",
+        readsr = "chunks/chunk_{chunk}_R2.fastq.gz"
+    output:
+        readsf=temp("chunks_processed/chunk_{chunk}_reads1.fastq"),
+        readsr=temp("chunks_processed/chunk_{chunk}_reads2.fastq"),
+        barcodes=temp("chunks_processed/chunk_{chunk}_barcodes.fastq"),
     container: "docker://ghcr.io/vdblab/biopython:1.70a"
-    log: "logs/primer_removal.log"
-    message: "01 - removing primer sequences from fastq pools"
+    log: "logs/primer_removal_chunk_{chunk}.log"
+    message: "01 - removing primer sequences from fastq chunk {wildcards.chunk}"
     resources:
         mem_mb=lambda wc, attempt: 12 * 1024 * attempt,
         runtime=lambda wc, attempt: 4 * 60 * attempt,
@@ -100,6 +146,31 @@ rule remove_primers:
         primerr=config['primerr']
     script: "scripts/strip_addons3_py3.py"
 
+def aggregate_primer_chunks(wildcards):
+    checkpoint_output = checkpoints.split_fastq.get().output[0]
+    chunks = glob_wildcards(os.path.join(checkpoint_output, "chunk_{chunk}_R1.fastq.gz")).chunk
+    
+    return {
+        "readsf": expand("chunks_processed/chunk_{chunk}_reads1.fastq", chunk=chunks),
+        "readsr": expand("chunks_processed/chunk_{chunk}_reads2.fastq", chunk=chunks),
+        "barcodes": expand("chunks_processed/chunk_{chunk}_barcodes.fastq", chunk=chunks)
+    }
+
+rule remove_primers:
+    input:
+        unpack(aggregate_primer_chunks)
+    output:
+        readsf=temp("reads1.fastq"),
+        readsr=temp("reads2.fastq"),
+        barcodes="barcodes.fastq",
+    shell:
+        """
+        # Concatenate all chunks
+        cat {input.readsf} > {output.readsf}
+        cat {input.readsr} > {output.readsr}
+        cat {input.barcodes} > {output.barcodes}
+        """
+
 # rule clean_oligos:
 #     input: oligos = config["oligos"]
 #     output: oligos=os.path.basename(input_files["oligos"]) + ".clean"
@@ -108,6 +179,7 @@ rule remove_primers:
 #     threads: 1
 #     log: "logs/oligo_cleaning.log"
 #     script: "scripts/oligos_cleaning_cl.R"
+
 
 
 rule convert_oligos_to_mapping_file:
