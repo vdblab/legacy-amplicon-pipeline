@@ -48,7 +48,7 @@ with open (input_files["oligos"], "r") as inf:
 # we add "Unassigned" to samples in some outputs
 # see http://qiime.org/scripts/split_libraries_fastq.html
 
-def get_num_shards_for_sample(sample):
+def get_num_shards(sample):
     """Calculate number of shards based on file size (1-20 shards)"""
     try:
         fq1_size = os.path.getsize(MANIFEST.loc[sample, "R1"])
