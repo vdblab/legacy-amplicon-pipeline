@@ -48,19 +48,12 @@ with open (input_files["oligos"], "r") as inf:
 # we add "Unassigned" to samples in some outputs
 # see http://qiime.org/scripts/split_libraries_fastq.html
 
-def get_num_shards():
+def get_num_shards(read_f, read_r):
     """Calculate number of shards based on file size (1-20 shards)"""
-    try:
-        total_size = 0
-        for f in input_files["readsf"]:
-            total_size += os.path.getsize(f)
-        for f in input_files["readsr"]:
-            total_size += os.path.getsize(f)
-        
-        size_gb = total_size / (1024**3)
-        return max(1, min(20, math.ceil(size_gb))) #20 seemed like a reasonable upper limit
-    except:
-        return 1
+    total_size = os.path.getsize(reads_f) + os.path.getsize(reads_r)
+    size_gb = total_size / (1024**3)
+    print(size_gb)
+    return max(1, min(20, math.ceil(size_gb))) #20 seemed like a reasonable upper limit
 
 localrules:
    all,
@@ -104,7 +97,7 @@ checkpoint split_fastq:
         import subprocess
         
         # Calculate number of shards
-        num_shards = get_num_shards()
+        num_shards = get_num_shards(input.readsf, input.readsr)
         
         # Create output directory
         os.makedirs(output[0], exist_ok=True)
