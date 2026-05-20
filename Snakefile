@@ -138,7 +138,7 @@ rule remove_primers_chunk:
     threads: 1
     params:
         primerf=config['primerf'],
-        primerr=config['primerr'] 
+        primerr=config['primerr'],
         scrap_seq=temp("chunks_processed/chunk_{chunk}_scrap.fastq")
     shell: 
         """
