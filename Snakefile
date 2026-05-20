@@ -138,12 +138,20 @@ rule remove_primers_chunk:
     threads: 1
     params:
         primerf=config['primerf'],
-        primerr=config['primerr'],
-        readsf=output['readsf'],
-        readsr=output['readsr'],
-        barcodes=output['barcodes'],
-        scrap_seqfile=temp("chunks_processed/chunk_{chunk}_scrap.fastq")
-    script: "scripts/strip_addons3_py3.py"
+        primerr=config['primerr'] 
+        scrap_seq=temp("chunks_processed/chunk_{chunk}_scrap.fastq")
+    shell: 
+        """
+        python scripts/strip_addons3_py3.py \
+            primerf={params.primerf}
+            primerr={params.preimerr}
+            readsf={output.readsf} \
+            readsr={output.readsr} \
+            barcodes={output.barcodes} \
+            scrap_seqfile={params.scrap_seq}
+        rm {inputs.readsf}
+        rm {inputs.readsr}
+            """
 
 def aggregate_primer_chunks(wildcards):
     checkpoint_output = checkpoints.split_fastq.get().output[0]
@@ -168,8 +176,6 @@ rule remove_primers:
         cat {input.readsf} > {output.readsf}
         cat {input.readsr} > {output.readsr}
         cat {input.barcodes} > {output.barcodes}
-        # Remove chunks
-        rm-rf chunks
         """
 
 # rule clean_oligos:
