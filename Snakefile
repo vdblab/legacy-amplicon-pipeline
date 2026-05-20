@@ -141,7 +141,7 @@ rule remove_primers_chunk:
         primerr=config['primerr'],
         readsf=output['readsf'],
         readsr=output['readsr'],
-        barcodes=output['barcodes']
+        barcodes=output['barcodes'],
         scrap_seqfile=temp("chunks_processed/chunk_{chunk}_scrap.fastq")
     script: "scripts/strip_addons3_py3.py"
 
