@@ -31,7 +31,7 @@ def primer_pattern(primer,pdiffs=0):
 
 
 #strip barcode addons at beginning of fastq files
-def strip_barcode_addons(seqfile1,seqfile2,pdiffs=0,remove_bar_primer=False,fw_primer=None,rev_primer=None,test=False):
+def strip_barcode_addons(seqfile1,seqfile2,pdiffs=0,remove_bar_primer=False,fw_primer=None,rev_primer=None,test=False,trim_seqfile1='reads1.fastq',trim_seqfile2='reads2.fastq',bar_seqfile = 'barcodes.fastq',scrap_seqfile = 'scrap.fastq'):
 	if fw_primer is None:
 		fw_primer = 'AYTGGGYDTAAAGNG'
 	if rev_primer is None:
@@ -53,10 +53,7 @@ def strip_barcode_addons(seqfile1,seqfile2,pdiffs=0,remove_bar_primer=False,fw_p
 	max_len_addon = 8 #addon is 1-8 bp
 	max_len_fw = len_barcode + max_len_addon + len(fw_primer)
 	max_len_rev = len_barcode + max_len_addon + len(rev_primer)
-	trim_seqfile1 = 'reads1.fastq'
-	trim_seqfile2 = 'reads2.fastq'
-	scrap_seqfile = 'scrap.fastq'
-	bar_seqfile = 'barcodes.fastq'
+
 	if gzipped: #gzipped
 		seq1 = gzip.open(seqfile1,'rt')
 		seq2 = gzip.open(seqfile2,'rt')

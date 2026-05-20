@@ -118,12 +118,13 @@ checkpoint split_fastq:
 
             # just learned about the ::: operator, parallel specific one that seperates command and the 
             # files to run it on (which can be expanded from a pattern like below.)
-            shell(f"parallel gzip ::: {output[0]}/chunk_*.fastq") 
+            #actually
+            #shell(f"parallel gzip ::: {output[0]}/chunk_*.fastq") 
 
 rule remove_primers_chunk:
     input:
-        readsf = "chunks/chunk_{chunk}_R1.fastq.gz",
-        readsr = "chunks/chunk_{chunk}_R2.fastq.gz"
+        readsf = "chunks/chunk_{chunk}_R1.fastq",
+        readsr = "chunks/chunk_{chunk}_R2.fastq"
     output:
         readsf=temp("chunks_processed/chunk_{chunk}_reads1.fastq"),
         readsr=temp("chunks_processed/chunk_{chunk}_reads2.fastq"),
@@ -137,7 +138,11 @@ rule remove_primers_chunk:
     threads: 1
     params:
         primerf=config['primerf'],
-        primerr=config['primerr']
+        primerr=config['primerr'],
+        readsf=output['readsf'],
+        readsr=output['readsr'],
+        barcodes=output['barcodes']
+        scrap_seqfile=temp("chunks_processed/chunk_{chunk}_scrap.fastq")
     script: "scripts/strip_addons3_py3.py"
 
 def aggregate_primer_chunks(wildcards):
@@ -163,6 +168,8 @@ rule remove_primers:
         cat {input.readsf} > {output.readsf}
         cat {input.readsr} > {output.readsr}
         cat {input.barcodes} > {output.barcodes}
+        # Remove chunks
+        rm-rf chunks
         """
 
 # rule clean_oligos:
