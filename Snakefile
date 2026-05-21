@@ -139,18 +139,19 @@ rule remove_primers_chunk:
     params:
         primerf=config['primerf'],
         primerr=config['primerr'],
-        scrap_seq=temp("chunks_processed/chunk_{chunk}_scrap.fastq")
+        scrap_seq="chunks_processed/chunk_{chunk}_scrap.fastq"
+        script_path=workflow.basedir + "/scripts/strip_addons3_py3.py"
     shell: 
         """
-        python scripts/strip_addons3_py3.py \
+        python {params.script_path} \
             {input.readsf} {input.readsr} \
-            primerf={params.primerf}
-            primerr={params.primerr}
+            primerf={params.primerf} \
+            primerr={params.primerr} \
             readsf={output.readsf} \
             readsr={output.readsr} \
             barcodes={output.barcodes} \
             scrap_seqfile={params.scrap_seq}
-            2 > {log}
+            2> {log}
             """
 
 def aggregate_primer_chunks(wildcards):
