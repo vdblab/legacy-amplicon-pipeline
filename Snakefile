@@ -115,7 +115,7 @@ checkpoint split_fastq:
             # For now just assuming we have R1 and R2.... this will need to be updated for the se case
             shell(f"zcat {input.readsf} | split -l {lines_per_shard} -d --additional-suffix='_R1.fastq' - {output[0]}/chunk_")
             shell(f"zcat {input.readsr} | split -l {lines_per_shard} -d --additional-suffix='_R2.fastq' - {output[0]}/chunk_")
-
+            shell("mkdir -p chunks_processed")
             # just learned about the ::: operator, parallel specific one that seperates command and the 
             # files to run it on (which can be expanded from a pattern like below.)
             #actually
@@ -167,8 +167,8 @@ rule remove_primers:
     input:
         unpack(aggregate_primer_chunks)
     output:
-        readsf=temp("reads1.fastq"),
-        readsr=temp("reads2.fastq"),
+        readsf=temp("primers_rem_reads1.fastq"),
+        readsr=temp("primers_rem_reads2.fastq"),
         barcodes="barcodes.fastq",
     shell:
         """
@@ -217,7 +217,7 @@ rule guess_encoding_of_fastq:
 
 rule add_demultiplex_info_to_fastq:
     input:
-        reads="reads1.fastq",
+        reads="primers_rem_reads1.fastq",
         map="1.map.txt",
         encoding="encoding.txt",
         barcodes="barcodes.fastq"
@@ -237,7 +237,7 @@ rule add_demultiplex_info_to_fastq:
 
 use rule add_demultiplex_info_to_fastq as add_demultiplex_info_to_fastq_R2 with:
     input:
-        reads="reads2.fastq",
+        reads="primers_rem_reads2.fastq",
         map="2.map.txt",
         encoding="encoding.txt",
         barcodes="barcodes.fastq"
