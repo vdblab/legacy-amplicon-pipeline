@@ -139,7 +139,7 @@ rule remove_primers_chunk:
     params:
         primerf=config['primerf'],
         primerr=config['primerr'],
-        scrap_seq="chunks_processed/chunk_{chunk}_scrap.fastq"
+        scrap_seq="chunks_processed/chunk_{chunk}_scrap.fastq",
         script_path=workflow.basedir + "/scripts/strip_addons3_py3.py"
     shell: 
         """
