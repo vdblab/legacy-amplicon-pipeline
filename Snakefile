@@ -207,7 +207,7 @@ rule convert_oligos_to_mapping_file:
 
 
 rule guess_encoding_of_fastq:
-    input: "reads1.fastq"
+    input: "primers_rem_reads1.fastq"
     container: "docker://ghcr.io/vdblab/biopython:1.70a"
     output: "encoding.txt"
     message: "04 - determining the encoding of the FASTQ quality scores"
