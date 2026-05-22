@@ -144,12 +144,13 @@ rule remove_primers_chunk:
     shell: 
         """
         python {params.script_path} \
-            {input.readsf} {input.readsr} \
+            seqfile1={input.readsf} \
+            seqfile2= {input.readsr} \
             primerf={params.primerf} \
             primerr={params.primerr} \
-            readsf={output.readsf} \
-            readsr={output.readsr} \
-            barcodes={output.barcodes} \
+            trim_seqfile1={output.readsf} \
+            trim_seqfile2={output.readsr} \
+            bar_seqfile={output.barcodes} \
             scrap_seqfile={params.scrap_seq}
             2> {log}
             """

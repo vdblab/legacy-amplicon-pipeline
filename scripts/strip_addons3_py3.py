@@ -164,6 +164,10 @@ def main():
 	parser = argparse.ArgumentParser(description='YT: Trims off barcode addons. Output will be named reads1.fastq and reads2.fastq. Sequences that do not match both forward and reverse are stored in scrap.fastq.')
 	parser.add_argument('seqfile1',help='Forward fastq file.')
 	parser.add_argument('seqfile2',help='Reverse fastq file.')
+	parser.add_argument('trim_seqfile1',help='Trimmed forward fastq file output.')
+	parser.add_argument('trim_seqfile2',help='Trimmed reverse fastq file output.')
+	parser.add_argument('bar_seqfile',help='Barcode file output.')
+	parser.add_argument('scrap_seqfile',help='Scrap reads fastq file.')
 	parser.add_argument('-pdiffs',type=int,help='Number of primer bp mismatches allowed (default is 0).',metavar='<int>',default=0)
 	parser.add_argument('-remove_bar_primer',action='store_true',help='In addition to stripping addons, remove barcode and primer, and store barcode separately in barcodes.fastq. Default=false, where barcode and primer stay on the sequences.')
 	parser.add_argument('-fw_primer',type=str,help='Forward primer. Default is 16S V4: AYTGGGYDTAAAGNG')
@@ -172,10 +176,10 @@ def main():
 	args = parser.parse_args()
 	strip_barcode_addons(**vars(args))
 
-#if __name__ == '__main__':
-#	main()
+if __name__ == '__main__':
+	main()
 
-with open(snakemake.log[0], "w") as f:
-    sys.stderr = sys.stdout = f
-    strip_barcode_addons(snakemake.input.readsf, snakemake.input.readsr, pdiffs=1, remove_bar_primer=True,
-                         fw_primer=snakemake.params.primerf,  rev_primer=snakemake.params.primerr)
+#with open(snakemake.log[0], "w") as f:
+#    sys.stderr = sys.stdout = f
+#    strip_barcode_addons(snakemake.input.readsf, snakemake.input.readsr, pdiffs=1, remove_bar_primer=True,
+#                         fw_primer=snakemake.params.primerf,  rev_primer=snakemake.params.primerr)
