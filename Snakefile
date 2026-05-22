@@ -115,11 +115,8 @@ checkpoint split_fastq:
             # For now just assuming we have R1 and R2.... this will need to be updated for the se case
             shell(f"zcat {input.readsf} | split -l {lines_per_shard} -d --additional-suffix='_R1.fastq' - {output[0]}/chunk_")
             shell(f"zcat {input.readsr} | split -l {lines_per_shard} -d --additional-suffix='_R2.fastq' - {output[0]}/chunk_")
-            shell("mkdir -p chunks_processed")
-            # just learned about the ::: operator, parallel specific one that seperates command and the 
-            # files to run it on (which can be expanded from a pattern like below.)
-            #actually
-            #shell(f"parallel gzip ::: {output[0]}/chunk_*.fastq") 
+            shell(f"mkdir -p chunks_processed")
+
 
 rule remove_primers_chunk:
     input:
@@ -144,14 +141,14 @@ rule remove_primers_chunk:
     shell: 
         """
         python {params.script_path} \
-            seqfile1={input.readsf} \
-            seqfile2= {input.readsr} \
-            primerf={params.primerf} \
-            primerr={params.primerr} \
-            trim_seqfile1={output.readsf} \
-            trim_seqfile2={output.readsr} \
-            bar_seqfile={output.barcodes} \
-            scrap_seqfile={params.scrap_seq}
+            {input.readsf} \
+            {input.readsr} \
+            -primerf={params.primerf} \
+            -primerr={params.primerr} \
+            -trim_seqfile1={output.readsf} \
+            -trim_seqfile2={output.readsr} \
+            -bar_seqfile={output.barcodes} \
+            -scrap_seqfile={params.scrap_seq}
             2> {log}
             """
 
