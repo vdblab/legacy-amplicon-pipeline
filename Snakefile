@@ -1,6 +1,7 @@
 import glob
 import gzip
 import os
+import math
 from contextlib import redirect_stderr
 import traceback
 import pandas as pd
@@ -48,6 +49,13 @@ with open (input_files["oligos"], "r") as inf:
 # we add "Unassigned" to samples in some outputs
 # see http://qiime.org/scripts/split_libraries_fastq.html
 
+def get_num_shards(read_f, read_r):
+    """Calculate number of shards based on file size (1-20 shards)"""
+    total_size = os.path.getsize(read_f) + os.path.getsize(read_r)
+    size_gb = total_size / (1024**3)
+    print(size_gb)
+    return max(1, min(20, math.ceil(size_gb))) #20 seemed like a reasonable upper limit
+
 localrules:
    all,
    output_manifest,
@@ -80,25 +88,96 @@ rule merge_lanes_if_needed:
         cat {input.readsr} >> reads2.fastq.gz
         """
 
-rule remove_primers:
+checkpoint split_fastq:
     input:
         readsf = "reads1.fastq.gz",
         readsr = "reads2.fastq.gz"
     output:
-        readsf=temp("reads1.fastq"),
-        readsr=temp("reads2.fastq"),
-        barcodes="barcodes.fastq",
+        directory("chunks")
+    resources:
+        runtime=lambda wc, attempt: 10 * 60 * attempt,
+    threads: 10
+    run:
+        import subprocess
+
+        num_shards = get_num_shards(input.readsf, input.readsr)
+        os.makedirs(output[0], exist_ok=True)
+        
+        if num_shards == 1:
+            shell(f"ln -sf $(realpath {input.readsf}) {output[0]}/chunk_00_R1.fastq.gz")
+            shell(f"ln -sf $(realpath {input.readsr}) {output[0]}/chunk_00_R2.fastq.gz")
+        else:
+
+            total_lines = int(subprocess.check_output(f"zcat {input.readsf} | wc -l", shell=True).decode().strip())
+            reads_per_shard = max(1, math.ceil((total_lines // 4) / num_shards))
+            lines_per_shard = reads_per_shard * 4
+            
+            # For now just assuming we have R1 and R2.... this will need to be updated for the se case
+            shell(f"zcat {input.readsf} | split -l {lines_per_shard} -d --additional-suffix='_R1.fastq' - {output[0]}/chunk_")
+            shell(f"zcat {input.readsr} | split -l {lines_per_shard} -d --additional-suffix='_R2.fastq' - {output[0]}/chunk_")
+            shell(f"mkdir -p chunks_processed")
+
+
+rule remove_primers_chunk:
+    input:
+        readsf = "chunks/chunk_{chunk}_R1.fastq",
+        readsr = "chunks/chunk_{chunk}_R2.fastq"
+    output:
+        readsf=temp("chunks_processed/chunk_{chunk}_reads1.fastq"),
+        readsr=temp("chunks_processed/chunk_{chunk}_reads2.fastq"),
+        barcodes=temp("chunks_processed/chunk_{chunk}_barcodes.fastq"),
     container: "docker://ghcr.io/vdblab/biopython:1.70a"
-    log: "logs/primer_removal.log"
-    message: "01 - removing primer sequences from fastq pools"
+    log: "logs/primer_removal_chunk_{chunk}.log"
+    message: "01 - removing primer sequences from fastq chunk {wildcards.chunk}"
     resources:
         mem_mb=lambda wc, attempt: 12 * 1024 * attempt,
         runtime=lambda wc, attempt: 4 * 60 * attempt,
     threads: 1
     params:
         primerf=config['primerf'],
-        primerr=config['primerr']
-    script: "scripts/strip_addons3_py3.py"
+        primerr=config['primerr'],
+        scrap_seq="chunks_processed/chunk_{chunk}_scrap.fastq",
+        script_path=os.path.dirname(workflow.basedir) + "/scripts/strip_addons3_py3.py"
+    shell: 
+        """
+        python {params.script_path} \
+            {input.readsf} \
+            {input.readsr} \
+            -fw_primer={params.primerf} \
+            -rev_primer={params.primerr} \
+            -trim_seqfile1={output.readsf} \
+            -trim_seqfile2={output.readsr} \
+            -bar_seqfile={output.barcodes} \
+            -scrap_seqfile={params.scrap_seq} \
+            -remove_bar_primer \
+            2> {log}
+            """
+
+def aggregate_primer_chunks(wildcards):
+    checkpoint_output = checkpoints.split_fastq.get().output[0]
+    chunks = glob_wildcards(os.path.join(checkpoint_output, "chunk_{chunk}_R1.fastq")).chunk
+    
+    return {
+        "readsf": expand("chunks_processed/chunk_{chunk}_reads1.fastq", chunk=chunks),
+        "readsr": expand("chunks_processed/chunk_{chunk}_reads2.fastq", chunk=chunks),
+        "barcodes": expand("chunks_processed/chunk_{chunk}_barcodes.fastq", chunk=chunks)
+    }
+
+rule remove_primers:
+    input:
+        unpack(aggregate_primer_chunks)
+    output:
+        readsf=temp("primers_rem_reads1.fastq"),
+        readsr=temp("primers_rem_reads2.fastq"),
+        barcodes="barcodes.fastq",
+    shell:
+        """
+        # Concatenate all chunks
+        cat {input.readsf} > {output.readsf}
+        cat {input.readsr} > {output.readsr}
+        cat {input.barcodes} > {output.barcodes}
+        rm -rf chunks
+        """
 
 # rule clean_oligos:
 #     input: oligos = config["oligos"]
@@ -108,6 +187,7 @@ rule remove_primers:
 #     threads: 1
 #     log: "logs/oligo_cleaning.log"
 #     script: "scripts/oligos_cleaning_cl.R"
+
 
 
 rule convert_oligos_to_mapping_file:
@@ -128,7 +208,7 @@ rule convert_oligos_to_mapping_file:
 
 
 rule guess_encoding_of_fastq:
-    input: "reads1.fastq"
+    input: "primers_rem_reads1.fastq"
     container: "docker://ghcr.io/vdblab/biopython:1.70a"
     output: "encoding.txt"
     message: "04 - determining the encoding of the FASTQ quality scores"
@@ -138,7 +218,7 @@ rule guess_encoding_of_fastq:
 
 rule add_demultiplex_info_to_fastq:
     input:
-        reads="reads1.fastq",
+        reads="primers_rem_reads1.fastq",
         map="1.map.txt",
         encoding="encoding.txt",
         barcodes="barcodes.fastq"
@@ -158,7 +238,7 @@ rule add_demultiplex_info_to_fastq:
 
 use rule add_demultiplex_info_to_fastq as add_demultiplex_info_to_fastq_R2 with:
     input:
-        reads="reads2.fastq",
+        reads="primers_rem_reads2.fastq",
         map="2.map.txt",
         encoding="encoding.txt",
         barcodes="barcodes.fastq"

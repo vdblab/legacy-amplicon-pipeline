@@ -31,7 +31,7 @@ def primer_pattern(primer,pdiffs=0):
 
 
 #strip barcode addons at beginning of fastq files
-def strip_barcode_addons(seqfile1,seqfile2,pdiffs=0,remove_bar_primer=False,fw_primer=None,rev_primer=None,test=False):
+def strip_barcode_addons(seqfile1,seqfile2,pdiffs=0,remove_bar_primer=False,fw_primer=None,rev_primer=None,test=False,trim_seqfile1='reads1.fastq',trim_seqfile2='reads2.fastq',bar_seqfile = 'barcodes.fastq',scrap_seqfile = 'scrap.fastq'):
 	if fw_primer is None:
 		fw_primer = 'AYTGGGYDTAAAGNG'
 	if rev_primer is None:
@@ -53,10 +53,7 @@ def strip_barcode_addons(seqfile1,seqfile2,pdiffs=0,remove_bar_primer=False,fw_p
 	max_len_addon = 8 #addon is 1-8 bp
 	max_len_fw = len_barcode + max_len_addon + len(fw_primer)
 	max_len_rev = len_barcode + max_len_addon + len(rev_primer)
-	trim_seqfile1 = 'reads1.fastq'
-	trim_seqfile2 = 'reads2.fastq'
-	scrap_seqfile = 'scrap.fastq'
-	bar_seqfile = 'barcodes.fastq'
+
 	if gzipped: #gzipped
 		seq1 = gzip.open(seqfile1,'rt')
 		seq2 = gzip.open(seqfile2,'rt')
@@ -160,13 +157,15 @@ def strip_barcode_addons(seqfile1,seqfile2,pdiffs=0,remove_bar_primer=False,fw_p
 	print('Total Seqs: '+str(totalseqs)+' (100%)')
 
 
-
-
 def main():
 	#def strip_barcode_addons(seqfile1,seqfile2,pdiffs=0,separate_barfile=False,test=False):
 	parser = argparse.ArgumentParser(description='YT: Trims off barcode addons. Output will be named reads1.fastq and reads2.fastq. Sequences that do not match both forward and reverse are stored in scrap.fastq.')
 	parser.add_argument('seqfile1',help='Forward fastq file.')
 	parser.add_argument('seqfile2',help='Reverse fastq file.')
+	parser.add_argument('-trim_seqfile1', default='reads1.fastq', help='Trimmed forward fastq file output.')
+	parser.add_argument('-trim_seqfile2', default='reads2.fastq', help='Trimmed reverse fastq file output.')
+	parser.add_argument('-bar_seqfile', default = 'barcodes.fastq', help='Barcode file output.')
+	parser.add_argument('-scrap_seqfile', default = 'scrap.fastq', help='Scrap reads fastq file.')
 	parser.add_argument('-pdiffs',type=int,help='Number of primer bp mismatches allowed (default is 0).',metavar='<int>',default=0)
 	parser.add_argument('-remove_bar_primer',action='store_true',help='In addition to stripping addons, remove barcode and primer, and store barcode separately in barcodes.fastq. Default=false, where barcode and primer stay on the sequences.')
 	parser.add_argument('-fw_primer',type=str,help='Forward primer. Default is 16S V4: AYTGGGYDTAAAGNG')
@@ -175,10 +174,10 @@ def main():
 	args = parser.parse_args()
 	strip_barcode_addons(**vars(args))
 
-#if __name__ == '__main__':
-#	main()
+if __name__ == '__main__':
+	main()
 
-with open(snakemake.log[0], "w") as f:
-    sys.stderr = sys.stdout = f
-    strip_barcode_addons(snakemake.input.readsf, snakemake.input.readsr, pdiffs=1, remove_bar_primer=True,
-                         fw_primer=snakemake.params.primerf,  rev_primer=snakemake.params.primerr)
+#with open(snakemake.log[0], "w") as f:
+#    sys.stderr = sys.stdout = f
+#    strip_barcode_addons(snakemake.input.readsf, snakemake.input.readsr, pdiffs=1, remove_bar_primer=True,
+#                         fw_primer=snakemake.params.primerf,  rev_primer=snakemake.params.primerr)
