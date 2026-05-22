@@ -143,8 +143,8 @@ rule remove_primers_chunk:
         python {params.script_path} \
             {input.readsf} \
             {input.readsr} \
-            -primerf={params.primerf} \
-            -primerr={params.primerr} \
+            -fw_primer={params.primerf} \
+            -rev_primer={params.primerr} \
             -trim_seqfile1={output.readsf} \
             -trim_seqfile2={output.readsr} \
             -bar_seqfile={output.barcodes} \
