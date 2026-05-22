@@ -148,7 +148,8 @@ rule remove_primers_chunk:
             -trim_seqfile1={output.readsf} \
             -trim_seqfile2={output.readsr} \
             -bar_seqfile={output.barcodes} \
-            -scrap_seqfile={params.scrap_seq}
+            -scrap_seqfile={params.scrap_seq} \
+            -remove_bar_primer \
             2> {log}
             """
 
